@@ -1,0 +1,143 @@
+---
+title: "Coursera Practical Machine Learning Final Project"
+author: "Kalyan Saikia"
+date: "August 13, 2016"
+output: 
+  html_document: 
+    keep_md: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## INTRODUCTION 
+
+Background of the project:
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. 
+
+In this project, the goal is to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants and predict the manner in which they did the exercise. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. 
+
+### Loading required R packages for the current study
+
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(corrplot)
+```
+
+## Data Collection
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+These two datasets are downloaded and copied into local disk and then loaded into R using 'read.csv' function.
+
+```{r}
+set.seed(30001)
+# Reading the original data
+train_Raw <- read.csv('./pml-training.csv', header=T, na.strings = c("", "NA"))
+validationRaw <- read.csv('./pml-testing.csv', header=T, na.strings = c("", "NA"))
+
+dim(train_Raw)
+dim(validationRaw)
+```
+
+### Data Cleanup
+Data cleanup is a very important step in this analysis. 
+Here we will get rid of the observations with missing values and some meaningless variables. 
+
+First we remove columns that contain NA/missing values.
+Since data doesn't have time dependence so the columns with time information are removed from tha dataset including the first column (i.e. observation number). However, in the cleaned dataset, the variable 'classe' is kept as it will be use to develop the model.
+```{r}
+sum(complete.cases(train_Raw))
+
+# removing the columns with NA values
+train_Raw <- train_Raw[, colSums(is.na(train_Raw)) == 0] 
+validationRaw <- validationRaw[, colSums(is.na(validationRaw)) == 0] 
+
+# Removing unwanted columns
+train_Raw <- train_Raw[,c(8:60)] 
+validationRaw<- validationRaw[, c(8:60)] 
+
+```
+
+### Data partitioning
+
+In this project the test dataset downloaded from the data source will be used as validation data. 
+To carry out current prediction model the original training dataset (pml-training.csv) is partitioned into two datasets i.e. test and train.
+```{r}
+#partitioning original train data into two parts
+train_sample <- createDataPartition(y=train_Raw$classe, p=0.7, list=FALSE)
+train_data <- train_Raw[train_sample, ]
+test_data <- train_Raw[-train_sample, ]
+```
+
+##Data Modeling
+In this analysis we tried to fit Random forest algorithm to fit predictive model for recognition of activity. The reasons for selecting Random Forest are: (1) It automatically identifies the important variables and (2) It produces robust correlated covariates and outliers. 
+While employing Random Forest algorithm we applied 5 fold cross validation of the algorithm.
+
+```{r}
+Rfcontrol <- trainControl(method="cv", 5) # Specifying Random Forest method
+
+Rfmodel <- train(classe ~ ., data=train_data, method="rf", trControl=Rfcontrol, ntree=250)
+Rfmodel #Display the model parameters
+```
+
+After building model, the performance was tested using the partitioned test data as below:
+
+```{r}
+Rfpredict <- predict(Rfmodel, test_data)
+confusionMatrix(test_data$classe, Rfpredict)
+```
+
+Determining model accuracy and Out-of-sample Error 
+
+```{r}
+accuracy <- postResample(Rfpredict, test_data$classe) # Model Accuracy
+accuracy
+oose <- 1 - as.numeric(confusionMatrix(test_data$classe, Rfpredict)$overall[1]) # Out-of-sample error estimation
+oose
+```
+
+From the above parameter, the accuracy of modeling is estimated as 99.42% and out-of-sample error is 0.58%
+
+## Final Model Prediction
+After analysing the accuracy and out-of-sample error it was decided to go ahead Random Forest algorithm to predict the parameters 'classe' in the validation dataset. Here we are going to predict the the manner in which excercise was carried using the validation dataset for 20 observations. In this step we apply the model to the original test dataset as downloaded from the source.
+
+After reviewing data it was noticed a column called "problem_id" exist which needs to be removed before prediction.
+```{r}
+validationRaw<-validationRaw[,c(1:53)] #Removing 'problem_id'
+
+Finalresult <- predict(Rfmodel, validationRaw)
+Finalresult
+```
+
+## Appendix
+Viewing the correlation matrix and decision tree
+
+```{r}
+CP <- cor(train_data[, -length(names(train_data))])
+corrplot(CP, method="circle")
+
+
+```
+
+
+
+Vizualizing the Decision Tree
+
+```{r}
+treeModel <- rpart(classe ~ ., data=train_data)
+prp(treeModel) # fast plot
+```
+
