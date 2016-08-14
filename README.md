@@ -1,4 +1,4 @@
-## Practical_Machine_Learning_Project
+## Practical Machine Learning Project
 
 This rpository for submitting final project of Coursera practical machine learning course (Course 8)
 
